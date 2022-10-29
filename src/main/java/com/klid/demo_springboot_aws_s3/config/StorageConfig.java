@@ -32,21 +32,19 @@ public class StorageConfig {
         };
     }
 
-    private RetryPolicy retryPolicy() {
-        int maxAttempts = 2;
-
+    private RetryPolicy retryPolicy(int maxAttempts) {
         return RetryPolicy.builder()
             .numRetries(maxAttempts)
             .build();
     }
 
-    private ClientOverrideConfiguration clientOverrideConfiguration() {
-        Duration apiCallTimeout = Duration.ofSeconds(5);
+    private ClientOverrideConfiguration clientOverrideConfiguration(int maxAttempts, long timeoutMillis) {
+        var apiCallTimeout = Duration.ofMillis(timeoutMillis);
 
         return ClientOverrideConfiguration.builder()
             .apiCallAttemptTimeout(apiCallTimeout)
             .apiCallTimeout(apiCallTimeout)
-            .retryPolicy(retryPolicy())
+            .retryPolicy(retryPolicy(maxAttempts))
             .build();
     }
 
@@ -54,12 +52,14 @@ public class StorageConfig {
     public S3Client s3Client(
         @Value("${app.aws.s3.region}") String region,
         @Value("${app.aws.s3.access-key}") String accessKey,
-        @Value("${app.aws.s3.secret}") String secret
+        @Value("${app.aws.s3.secret}") String secret,
+        @Value("${app.aws.s3.max-attempts}") int maxAttempts,
+        @Value("${app.aws.s3.timeout-millis}") long timeoutMillis
     ) {
         return S3Client.builder()
             .region(Region.of(region))
             .credentialsProvider(StaticCredentialsProvider.create(awsCredentials(accessKey, secret)))
-            .overrideConfiguration(clientOverrideConfiguration())
+            .overrideConfiguration(clientOverrideConfiguration(maxAttempts, timeoutMillis))
             .build();
     }
 }

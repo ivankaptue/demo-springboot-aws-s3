@@ -1,9 +1,10 @@
-package com.klid.demo_springboot_aws_s3;
+package com.klid.demo_springboot_aws_s3.controller;
 
 import com.klid.demo_springboot_aws_s3.service.StorageService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Map;
 
@@ -21,8 +22,8 @@ public class StorageController {
     }
 
     @PostMapping
-    public ResponseEntity<String> saveFile(@RequestBody String content) {
-        var key = storageService.saveFile(content);
+    public ResponseEntity<String> saveFile(@RequestParam("file") MultipartFile multipartFile) {
+        var key = storageService.saveFile(multipartFile);
         return ResponseEntity.status(HttpStatus.CREATED).body(key);
     }
 

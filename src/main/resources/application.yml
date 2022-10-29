@@ -5,6 +5,8 @@ app:
             region: ${APP_AWS_S3_REGION}
             access-key: ${APP_AWS_S3_ACCESS_KEY}
             secret: ${APP_AWS_S3_SECRET}
+            max-attempts: ${APP_AWS_S3_MAX_ATTEMPTS}
+            timeout-millis: ${APP_AWS_S3_TIMEOUT_MILLIS}
 
 logging:
     level:

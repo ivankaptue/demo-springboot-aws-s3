@@ -7,16 +7,17 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
+import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.S3Exception;
 
-import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.nio.file.Files;
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
 /**
@@ -38,65 +39,58 @@ public class StorageService {
         this.bucket = bucket;
     }
 
-    public String saveFile(String content) {
-        String key = String.format("%s.txt", UUID.randomUUID());
+    public String saveFile(MultipartFile multipartFile) {
+        logger.info("Save file to S3 bucket");
 
-        logger.info("Key : " + key);
+        try {
 
-        var objectRequest = PutObjectRequest.builder()
-            .bucket(bucket)
-            .key(key)
-            .contentType(MediaType.TEXT_PLAIN_VALUE)
-            .build();
+            String key = String.format("%s.txt", UUID.randomUUID());
 
-        var file = createFileAndWriteContent(content);
+            var objectRequest = PutObjectRequest.builder()
+                .bucket(bucket)
+                .key(key)
+                .contentType(MediaType.TEXT_PLAIN_VALUE)
+                .build();
 
-        var requestBody = RequestBody.fromFile(file);
+            var requestBody = RequestBody.fromBytes(multipartFile.getBytes());
 
-        s3Client.putObject(objectRequest, requestBody);
+            s3Client.putObject(objectRequest, requestBody);
 
-        deleteLocalFile(file);
+            logger.info("File saved to S3 bucket");
 
-        logger.info("Done");
-
-        return key;
+            return key;
+        } catch (IOException ex) {
+            throw new StorageServiceException("Error when getting content of multipart file", ex, HttpStatus.BAD_REQUEST);
+        } catch (SdkClientException ex) {
+            throw new StorageServiceException("Client Error when calling S3 Service", ex, HttpStatus.BAD_REQUEST);
+        } catch (S3Exception ex) {
+            throw new StorageServiceException("Server Error when calling S3 Service", ex, HttpStatus.SERVICE_UNAVAILABLE);
+        }
     }
 
     public String getFileContent(String key) {
-        var objectRequest = GetObjectRequest.builder()
-            .bucket(bucket)
-            .key(key)
-            .build();
+        logger.info("Get file content from S3 bucket");
 
         try {
+            var objectRequest = GetObjectRequest.builder()
+                .bucket(bucket)
+                .key(key)
+                .build();
             var objectResponse = s3Client.getObject(objectRequest);
-            return new String(objectResponse.readAllBytes());
+
+            var content = new String(objectResponse.readAllBytes(), StandardCharsets.UTF_8);
+
+            logger.info("File content found and returned from S3 bucket");
+
+            return content;
         } catch (NoSuchKeyException ex) {
-            logger.error("Key does not exist");
-            throw new StorageServiceException(ex, HttpStatus.NOT_FOUND);
+            throw new StorageServiceException("Key does not exist", ex, HttpStatus.NOT_FOUND);
+        } catch (SdkClientException ex) {
+            throw new StorageServiceException("Client Error when calling S3 Service", ex, HttpStatus.BAD_REQUEST);
+        } catch (S3Exception ex) {
+            throw new StorageServiceException("Server Error when calling S3 Service", ex, HttpStatus.SERVICE_UNAVAILABLE);
         } catch (IOException ex) {
-            logger.error("IO exception");
-            throw new StorageServiceException(ex, HttpStatus.INTERNAL_SERVER_ERROR);
+            throw new StorageServiceException("Error when getting objectResponse content", ex, HttpStatus.SERVICE_UNAVAILABLE);
         }
-    }
-
-    private void deleteLocalFile(File file) {
-        try {
-            Files.delete(file.toPath());
-        } catch (Exception e) {
-            logger.error("Error on delete file", e);
-        }
-    }
-
-    private File createFileAndWriteContent(String fileContent) {
-        var file = new File(String.format("%s.txt", System.currentTimeMillis()));
-
-        try (var outputStream = new FileOutputStream(file)) {
-            outputStream.write(fileContent.getBytes());
-        } catch (IOException ex) {
-            ex.printStackTrace();
-        }
-
-        return file;
     }
 }
